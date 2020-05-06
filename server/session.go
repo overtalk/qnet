@@ -12,19 +12,13 @@ type Session interface {
 	GetSessionID() uint64
 	SetMeta(key string, value interface{})
 	GetMeta(key string) (interface{}, error)
-	SetClosed(value bool)
-	GetClosed() bool
-	SetNeedRemoved(value bool)
-	GetNeedRemoved() bool
 	Close() error
 }
 
 // --------------------------------------------------
 type BaseSession struct {
-	closed     bool
-	needRemove bool
-	sessionID  uint64
-	metas      map[string]interface{}
+	sessionID uint64
+	metas     map[string]interface{}
 }
 
 func NewBaseSession(sessionID uint64) *BaseSession {
@@ -36,22 +30,6 @@ func NewBaseSession(sessionID uint64) *BaseSession {
 
 func (bs *BaseSession) GetSessionID() uint64 {
 	return bs.sessionID
-}
-
-func (bs *BaseSession) GetClosed() bool {
-	return bs.closed
-}
-
-func (bs *BaseSession) SetClosed(value bool) {
-	bs.closed = value
-}
-
-func (bs *BaseSession) SetNeedRemoved(value bool) {
-	bs.needRemove = value
-}
-
-func (bs *BaseSession) GetNeedRemoved() bool {
-	return bs.needRemove
 }
 
 func (bs *BaseSession) SetMeta(key string, value interface{}) {

@@ -9,14 +9,14 @@ import (
 )
 
 type tcp struct {
-	svr      *server
+	svr      *Server
 	ep       *base.Endpoint   // endpoint
 	listener *net.TCPListener // for tcp
 	stopFlag bool
 	stopChan chan interface{} // close signal channel
 }
 
-func newTcp(ep *base.Endpoint, svr *server) (*tcp, error) {
+func newTcp(ep *base.Endpoint, svr *Server) (*tcp, error) {
 	addr, err := ep.TCPAddr()
 	if err != nil {
 		return nil, err
@@ -67,13 +67,14 @@ func (t *tcp) Start() error {
 				continue
 			}
 
+			// gen session id
 			baseSessionID++
 
 			// default is true
 			//conn.SetNoDelay(true)
 
 			// handle connection
-			go func(svr *server, sessionID uint64, conn *net.TCPConn) {
+			go func(svr *Server, sessionID uint64, conn *net.TCPConn) {
 				session := NewTcpSession(sessionID, conn)
 
 				// do some hook

@@ -8,12 +8,12 @@ import (
 )
 
 type udp struct {
-	svr     *server
+	svr     *Server
 	ep      *base.Endpoint // endpoint
 	udpConn *net.UDPConn   // for udp
 }
 
-func newUdp(ep *base.Endpoint, svr *server) (*udp, error) {
+func newUdp(ep *base.Endpoint, svr *Server) (*udp, error) {
 	addr, err := ep.UDPAddr()
 	if err != nil {
 		return nil, err
@@ -39,19 +39,6 @@ func (u *udp) Start() error {
 
 	go u.svr.handler(session)
 	return nil
-
-	//r := bufio.NewReader(svr.udpConn)
-	//for {
-	//	line, err := r.ReadBytes(byte('\n'))
-	//	switch err {
-	//	case nil:
-	//		break
-	//	case io.EOF:
-	//	default:
-	//		fmt.Println("ERROR", err)
-	//	}
-	//	svr.udpConn.Write(line)
-	//}
 }
 
 func (u *udp) Stop() {}

@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"sync"
-	"time"
 )
 
 type sessionManager struct {
@@ -63,22 +62,9 @@ func (manger *sessionManager) ClearClosedSession() {
 	defer manger.Unlock()
 
 	for sessionID, session := range manger.sessions {
-		if session.GetClosed() {
-			fmt.Println(session)
-			// TODO: close all session
-			session.Close()
-			delete(manger.sessions, sessionID)
-		}
-
-	}
-}
-
-func (manger *sessionManager) daemon() {
-	ticker := time.NewTicker(time.Second)
-	for {
-		select {
-		case <-ticker.C:
-
-		}
+		fmt.Println(session)
+		// TODO: close all session
+		session.Close()
+		delete(manger.sessions, sessionID)
 	}
 }
