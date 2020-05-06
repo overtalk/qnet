@@ -34,7 +34,7 @@ func (router *msgRouter) registerMsgHandler(id uint16, handler MsgHandler) error
 	return nil
 }
 
-func (router *msgRouter) handler(session Session) {
+func (router *msgRouter) streamMsgHandler(session Session) {
 	for {
 		// decode head
 		headerBytes := make([]byte, router.length)
@@ -49,10 +49,39 @@ func (router *msgRouter) handler(session Session) {
 
 		bodyByte := make([]byte, head.GetMsgLength())
 		if _, err := io.ReadFull(session, bodyByte); err != nil {
+			//todo: add log
+			fmt.Println(err)
 			break
 		}
 
 		msg := base.NewNetMsg(head, bodyByte)
+
+		f, flag := router.handlerMap[msg.GetMsgID()]
+		if !flag {
+			// todo: add log
+			continue
+		}
+
+		// todo: handle return
+		f(session, msg)
+	}
+}
+
+func (router *msgRouter) packetMsgHandler(session Session) {
+	for {
+		packet, err := session.ReadPacket()
+		if err != nil {
+			// todo: add log
+			break
+		}
+
+		// decode head
+		head, err := router.headDeserializeFunc(packet[:router.length])
+		if err != nil {
+			continue
+		}
+
+		msg := base.NewNetMsg(head, packet[router.length:])
 
 		f, flag := router.handlerMap[msg.GetMsgID()]
 		if !flag {

@@ -1,14 +1,18 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
+
+	"github.com/gorilla/websocket"
 )
 
 type Session interface {
 	io.Reader
 	io.Writer
+	ReadPacket() (p []byte, err error)
 	GetSessionID() uint64
 	SetMeta(key string, value interface{})
 	GetMeta(key string) (interface{}, error)
@@ -45,6 +49,18 @@ func (bs *BaseSession) GetMeta(key string) (interface{}, error) {
 	return value, nil
 }
 
+func (bs *BaseSession) Write(data []byte) (int, error) {
+	return 0, errors.New("write func is unrealized")
+}
+
+func (bs *BaseSession) Read(p []byte) (n int, err error) {
+	return 0, errors.New("read func is unrealized")
+}
+
+func (bs *BaseSession) ReadPacket() (p []byte, err error) {
+	return nil, errors.New("readMessage func is unrealized")
+}
+
 // --------------------------------------------------
 //type UdpSession TcpSession
 type TcpSession struct {
@@ -69,4 +85,39 @@ func (ts *TcpSession) Read(p []byte) (n int, err error) {
 
 func (ts *TcpSession) Close() error {
 	return ts.conn.Close()
+}
+
+// ------------------------------------------
+type WsSession struct {
+	BaseSession
+	conn *websocket.Conn
+}
+
+func NewWsSession(sessionID uint64, conn *websocket.Conn) *WsSession {
+	return &WsSession{
+		BaseSession: *NewBaseSession(sessionID),
+		conn:        conn,
+	}
+}
+
+func (ws *WsSession) Write(data []byte) (int, error) {
+	return len(data), ws.conn.WriteMessage(websocket.BinaryMessage, data)
+}
+
+func (ws *WsSession) ReadPacket() (p []byte, err error) {
+	mt, message, err := ws.conn.ReadMessage()
+	if err != nil {
+		return nil, err
+	}
+
+	if mt != websocket.BinaryMessage {
+		// todo: handle error
+		return nil, fmt.Errorf("invalid websocket messageType : %d", mt)
+	}
+
+	return message, nil
+}
+
+func (ws *WsSession) Close() error {
+	return ws.conn.Close()
 }

@@ -15,7 +15,7 @@ func main() {
 	svr, err := server.NewServer(
 		server.WithURL("tcp://127.0.0.1:9999"),
 		//server.WithHandler(handler),
-		server.WithDecoder(base.CSHeadLength, base.CSMsgHeadDeserializer),
+		server.WithMsgRouter(base.CSHeadLength, base.CSMsgHeadDeserializer),
 		server.WithConnectHook(
 			func(session server.Session) {
 				sessionID := session.GetSessionID()

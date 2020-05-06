@@ -9,7 +9,7 @@ import (
 
 type Option func(svr *Server) error
 
-func WithDecoder(length base.HeadLength, decoderFunc base.HeadDeserializeFunc) Option {
+func WithMsgRouter(length base.HeadLength, decoderFunc base.HeadDeserializeFunc) Option {
 	return func(svr *Server) error {
 		if svr.msgRouter != nil {
 			return errors.New("repetitive server msgRouter")
@@ -21,7 +21,7 @@ func WithDecoder(length base.HeadLength, decoderFunc base.HeadDeserializeFunc) O
 
 		decoder := newMsgRouter(length, decoderFunc)
 		svr.msgRouter = decoder
-		svr.handler = decoder.handler
+		//svr.handler = decoder.streamMsgHandler
 		return nil
 	}
 }
@@ -83,10 +83,11 @@ func WithEndPoint(ep *base.Endpoint) Option {
 				return err
 			}
 			svr.server = s
+			svr.stream = true
 			// add default tcp hook
 			svr.sessionManager = newSessionManager()
-			svr.connectHookList = append(svr.connectHookList, svr.defaultTcpConnectedHook)
-			svr.disconnectHookList = append(svr.disconnectHookList, svr.defaultTcpDisconnectedHook)
+			svr.connectHookList = append(svr.connectHookList, svr.defaultConnectedHook)
+			svr.disconnectHookList = append(svr.disconnectHookList, svr.defaultDisconnectedHook)
 		case base.ProtoTypeUdp:
 			s, err := newUdp(ep, svr)
 			if err != nil {
@@ -94,6 +95,10 @@ func WithEndPoint(ep *base.Endpoint) Option {
 			}
 			svr.server = s
 		case base.ProtoTypeWs:
+			svr.server = newWS(ep, svr)
+			svr.sessionManager = newSessionManager()
+			svr.connectHookList = append(svr.connectHookList, svr.defaultConnectedHook)
+			svr.disconnectHookList = append(svr.disconnectHookList, svr.defaultDisconnectedHook)
 		default:
 			return fmt.Errorf("invalid net protocol : %s", ep.Proto())
 		}

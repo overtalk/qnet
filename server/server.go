@@ -10,6 +10,7 @@ import (
 type Handler func(session Session)
 
 type Server struct {
+	stream             bool
 	server             model.IServer
 	msgRouter          *msgRouter
 	sessionManager     *sessionManager
@@ -32,7 +33,15 @@ func NewServer(options ...Option) (*Server, error) {
 
 func (svr *Server) Start() error {
 	if svr.handler == nil {
-		return errors.New("message handler is nil")
+		if svr.msgRouter == nil {
+			return errors.New("message handler is nil")
+		}
+
+		if svr.stream {
+			svr.handler = svr.msgRouter.streamMsgHandler
+		} else {
+			svr.handler = svr.msgRouter.packetMsgHandler
+		}
 	}
 
 	if svr.server == nil {
@@ -84,11 +93,11 @@ func (svr *Server) GetSessionMeta(sessionID uint64, key string) (interface{}, er
 }
 
 // ----------------------- hook ---------------------------
-func (svr *Server) defaultTcpConnectedHook(session Session) {
+func (svr *Server) defaultConnectedHook(session Session) {
 	svr.sessionManager.Add(session)
 }
 
-func (svr *Server) defaultTcpDisconnectedHook(session Session) {
+func (svr *Server) defaultDisconnectedHook(session Session) {
 	session.Close()
 	svr.sessionManager.Remove(session.GetSessionID())
 }

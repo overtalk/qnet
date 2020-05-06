@@ -7,6 +7,7 @@
 - 支持多种协议
     - [x] tcp
     - [x] udp
+    - [x] ws
     - [ ] kcp
 
 ## Tcp
