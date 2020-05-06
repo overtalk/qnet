@@ -17,13 +17,13 @@ func main() {
 		//server.WithHandler(handler),
 		server.WithMsgRouter(base.CSHeadLength, base.CSMsgHeadDeserializer),
 		server.WithConnectHook(
-			func(session server.Session) {
+			func(session base.Session) {
 				sessionID := session.GetSessionID()
 				fmt.Println("[ConnectHook] session id = ", sessionID)
 			},
 		),
 		server.WithDisconnectHook(
-			func(session server.Session) {
+			func(session base.Session) {
 				sessionID := session.GetSessionID()
 				fmt.Println("[DisconnectHook] disconnect, session id = ", sessionID)
 			},
@@ -44,11 +44,11 @@ func main() {
 	}
 }
 
-func messageHandler(session server.Session, msg *base.NetMsg) *base.NetMsg {
+func messageHandler(session base.Session, msg *base.NetMsg) *base.NetMsg {
 	return nil
 }
 
-func handler(session server.Session) {
+func handler(session base.Session) {
 	id := session.GetSessionID()
 
 	fmt.Println("[handler ", id, "]")

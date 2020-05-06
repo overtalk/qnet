@@ -5,27 +5,26 @@ import (
 	"io"
 
 	"github.com/overtalk/qnet/base"
+	"github.com/overtalk/qnet/iface"
 )
-
-type MsgHandler func(session Session, msg *base.NetMsg) *base.NetMsg
 
 type msgRouter struct {
 	length              base.HeadLength
-	handlerMap          map[uint16]MsgHandler
+	handlerMap          map[uint16]iface.MsgHandler
 	headDeserializeFunc base.HeadDeserializeFunc
 }
 
 func newMsgRouter(length base.HeadLength, decoderFunc base.HeadDeserializeFunc) *msgRouter {
 	ret := &msgRouter{
 		length:              length,
-		handlerMap:          make(map[uint16]MsgHandler),
+		handlerMap:          make(map[uint16]iface.MsgHandler),
 		headDeserializeFunc: decoderFunc,
 	}
 
 	return ret
 }
 
-func (router *msgRouter) registerMsgHandler(id uint16, handler MsgHandler) error {
+func (router *msgRouter) registerMsgHandler(id uint16, handler iface.MsgHandler) error {
 	if _, isExist := router.handlerMap[id]; isExist {
 		return fmt.Errorf("message id %d is already registered", id)
 	}
@@ -34,7 +33,7 @@ func (router *msgRouter) registerMsgHandler(id uint16, handler MsgHandler) error
 	return nil
 }
 
-func (router *msgRouter) streamMsgHandler(session Session) {
+func (router *msgRouter) streamMsgHandler(session base.Session) {
 	for {
 		// decode head
 		headerBytes := make([]byte, router.length)
@@ -67,7 +66,7 @@ func (router *msgRouter) streamMsgHandler(session Session) {
 	}
 }
 
-func (router *msgRouter) packetMsgHandler(session Session) {
+func (router *msgRouter) packetMsgHandler(session base.Session) {
 	for {
 		packet, err := session.ReadPacket()
 		if err != nil {

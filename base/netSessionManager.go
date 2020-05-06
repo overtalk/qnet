@@ -1,36 +1,36 @@
-package server
+package base
 
 import (
 	"fmt"
 	"sync"
 )
 
-type sessionManager struct {
+type SessionManager struct {
 	sync.RWMutex
 	sessions map[uint64]Session // connections，for both tcp & udp
 }
 
-func newSessionManager() *sessionManager {
-	return &sessionManager{
+func NewSessionManager() *SessionManager {
+	return &SessionManager{
 		sessions: make(map[uint64]Session),
 	}
 }
 
-func (manger *sessionManager) Add(s Session) {
+func (manger *SessionManager) Add(s Session) {
 	manger.Lock()
 	//TODO: add a log
 	manger.sessions[s.GetSessionID()] = s
 	manger.Unlock()
 }
 
-func (manger *sessionManager) Remove(sessionID uint64) {
+func (manger *SessionManager) Remove(sessionID uint64) {
 	manger.Lock()
 	//TODO: add a log
 	delete(manger.sessions, sessionID)
 	manger.Unlock()
 }
 
-func (manger *sessionManager) Get(sessionID uint64) (Session, error) {
+func (manger *SessionManager) Get(sessionID uint64) (Session, error) {
 	manger.RLock()
 	session, ok := manger.sessions[sessionID]
 	manger.RUnlock()
@@ -41,11 +41,11 @@ func (manger *sessionManager) Get(sessionID uint64) (Session, error) {
 	return session, nil
 }
 
-func (manger *sessionManager) Len() int {
+func (manger *SessionManager) Len() int {
 	return len(manger.sessions)
 }
 
-func (manger *sessionManager) ClearSession() {
+func (manger *SessionManager) ClearSession() {
 	manger.Lock()
 	defer manger.Unlock()
 
@@ -57,7 +57,7 @@ func (manger *sessionManager) ClearSession() {
 	}
 }
 
-func (manger *sessionManager) ClearClosedSession() {
+func (manger *SessionManager) ClearClosedSession() {
 	manger.Lock()
 	defer manger.Unlock()
 

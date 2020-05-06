@@ -25,13 +25,13 @@ func main() {
 		server.WithURL("ws://127.0.0.1:9999/ws"),
 		server.WithMsgRouter(base.HeadLength(0), TestMsgHeadDeserializer),
 		server.WithConnectHook(
-			func(session server.Session) {
+			func(session base.Session) {
 				sessionID := session.GetSessionID()
 				fmt.Println("[ConnectHook] session id = ", sessionID)
 			},
 		),
 		server.WithDisconnectHook(
-			func(session server.Session) {
+			func(session base.Session) {
 				sessionID := session.GetSessionID()
 				fmt.Println("[DisconnectHook] disconnect, session id = ", sessionID)
 			},
@@ -54,7 +54,7 @@ func main() {
 	}
 }
 
-func messageHandler(session server.Session, msg *base.NetMsg) *base.NetMsg {
+func messageHandler(session base .Session, msg *base.NetMsg) *base.NetMsg {
 	fmt.Println(string(msg.GetMsg()))
 	session.Write(msg.GetMsg())
 	return nil

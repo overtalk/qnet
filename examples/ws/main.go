@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/overtalk/qnet/base"
 	"io"
 	"log"
 	"time"
@@ -27,7 +28,7 @@ func main() {
 	}
 }
 
-func handler(session server.Session) {
+func handler(session base.Session) {
 	id := session.GetSessionID()
 
 	fmt.Println("[handler ", id, "]")

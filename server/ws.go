@@ -69,7 +69,7 @@ func (ws *ws) websocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := atomic.AddUint64(&ws.id, 1)
 
-	session := NewWsSession(sessionID, conn)
+	session := base.NewWsSession(sessionID, conn)
 
 	// do some hook
 	for _, connectHook := range ws.svr.connectHookList {

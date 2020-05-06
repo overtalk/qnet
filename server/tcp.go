@@ -75,7 +75,7 @@ func (t *tcp) Start() error {
 
 			// handle connection
 			go func(svr *Server, sessionID uint64, conn *net.TCPConn) {
-				session := NewTcpSession(sessionID, conn)
+				session := base.NewTcpSession(sessionID, conn)
 
 				// do some hook
 				for _, connectHook := range svr.connectHookList {

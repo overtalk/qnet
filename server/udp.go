@@ -35,7 +35,7 @@ func (u *udp) Start() error {
 		return errors.New("udp conn is nil")
 	}
 
-	session := NewTcpSession(0, u.udpConn)
+	session := base.NewTcpSession(0, u.udpConn)
 
 	go u.svr.handler(session)
 	return nil

@@ -1,4 +1,11 @@
-package model
+package iface
+
+import "github.com/overtalk/qnet/base"
+
+// Handler defines the func to handle net message
+type Handler func(session base.Session)
+
+type MsgHandler func(session base.Session, msg *base.NetMsg) *base.NetMsg
 
 type IServer interface {
 	Start() error
