@@ -9,14 +9,14 @@ import (
 
 type MsgHandler func(session Session, msg *base.NetMsg) *base.NetMsg
 
-type decoder struct {
+type msgRouter struct {
 	length              base.HeadLength
 	handlerMap          map[uint16]MsgHandler
 	headDeserializeFunc base.HeadDeserializeFunc
 }
 
-func newDecoder(length base.HeadLength, decoderFunc base.HeadDeserializeFunc) *decoder {
-	ret := &decoder{
+func newMsgRouter(length base.HeadLength, decoderFunc base.HeadDeserializeFunc) *msgRouter {
+	ret := &msgRouter{
 		length:              length,
 		handlerMap:          make(map[uint16]MsgHandler),
 		headDeserializeFunc: decoderFunc,
@@ -25,24 +25,24 @@ func newDecoder(length base.HeadLength, decoderFunc base.HeadDeserializeFunc) *d
 	return ret
 }
 
-func (decoder *decoder) registerMsgHandler(id uint16, handler MsgHandler) error {
-	if _, isExist := decoder.handlerMap[id]; isExist {
+func (router *msgRouter) registerMsgHandler(id uint16, handler MsgHandler) error {
+	if _, isExist := router.handlerMap[id]; isExist {
 		return fmt.Errorf("message id %d is already registered", id)
 	}
 
-	decoder.handlerMap[id] = handler
+	router.handlerMap[id] = handler
 	return nil
 }
 
-func (decoder *decoder) handler(session Session) {
+func (router *msgRouter) handler(session Session) {
 	for {
 		// decode head
-		headerBytes := make([]byte, decoder.length)
+		headerBytes := make([]byte, router.length)
 		if _, err := io.ReadFull(session, headerBytes); err != nil {
 			break
 		}
 
-		head, err := decoder.headDeserializeFunc(headerBytes)
+		head, err := router.headDeserializeFunc(headerBytes)
 		if err != nil {
 			continue
 		}
@@ -54,7 +54,7 @@ func (decoder *decoder) handler(session Session) {
 
 		msg := base.NewNetMsg(head, bodyByte)
 
-		f, flag := decoder.handlerMap[msg.GetMsgID()]
+		f, flag := router.handlerMap[msg.GetMsgID()]
 		if !flag {
 			// todo: add log
 			continue

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/overtalk/qnet/base"
-
 	"github.com/overtalk/qnet/server"
 )
 

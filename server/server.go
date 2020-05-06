@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+
 	"github.com/overtalk/qnet/model"
 )
 
@@ -10,7 +11,7 @@ type Handler func(session Session)
 
 type Server struct {
 	server             model.IServer
-	decoder            *decoder
+	msgRouter          *msgRouter
 	sessionManager     *sessionManager
 	handler            Handler
 	connectHookList    []Handler
@@ -47,11 +48,11 @@ func (svr *Server) Stop() {
 }
 
 func (svr *Server) RegisterMsgHandler(id uint16, handler MsgHandler) error {
-	if svr.decoder == nil {
-		return errors.New("decoder is absent")
+	if svr.msgRouter == nil {
+		return errors.New("msgRouter is absent")
 	}
 
-	return svr.decoder.registerMsgHandler(id, handler)
+	return svr.msgRouter.registerMsgHandler(id, handler)
 }
 
 func (svr *Server) SendBySessionID(sessionID uint64, data []byte) (int, error) {

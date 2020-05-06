@@ -3,11 +3,12 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/overtalk/qnet/base"
-	"github.com/overtalk/qnet/server"
 	"io"
 	"log"
 	"time"
+
+	"github.com/overtalk/qnet/base"
+	"github.com/overtalk/qnet/server"
 )
 
 func main() {

@@ -11,16 +11,16 @@ type Option func(svr *Server) error
 
 func WithDecoder(length base.HeadLength, decoderFunc base.HeadDeserializeFunc) Option {
 	return func(svr *Server) error {
-		if svr.decoder != nil {
-			return errors.New("repetitive server decoder")
+		if svr.msgRouter != nil {
+			return errors.New("repetitive server msgRouter")
 		}
 
 		if svr.handler != nil {
 			return errors.New("repetitive server message handler")
 		}
 
-		decoder := newDecoder(length, decoderFunc)
-		svr.decoder = decoder
+		decoder := newMsgRouter(length, decoderFunc)
+		svr.msgRouter = decoder
 		svr.handler = decoder.handler
 		return nil
 	}
