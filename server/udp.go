@@ -9,8 +9,9 @@ import (
 
 type udp struct {
 	svr     *Server
-	ep      *base.Endpoint // endpoint
-	udpConn *net.UDPConn   // for udp
+	ep      *base.Endpoint       // endpoint
+	udpConn *net.UDPConn         // for udp
+	natMap  map[int]*net.UDPAddr // nat map
 }
 
 func newUdp(ep *base.Endpoint, svr *Server) (*udp, error) {
@@ -18,6 +19,7 @@ func newUdp(ep *base.Endpoint, svr *Server) (*udp, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	udpConn, err := net.ListenUDP(string(base.ProtoTypeUdp), addr)
 	if err != nil {
 		return nil, err
@@ -35,10 +37,12 @@ func (u *udp) Start() error {
 		return errors.New("udp conn is nil")
 	}
 
-	session := base.NewTcpSession(0, u.udpConn)
+	session := NewTcpSession(0, u.udpConn)
 
 	go u.svr.handler(session)
 	return nil
 }
 
-func (u *udp) Stop() {}
+func (u *udp) Stop() {
+	u.udpConn.Close()
+}

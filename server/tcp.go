@@ -70,12 +70,9 @@ func (t *tcp) Start() error {
 			// gen session id
 			baseSessionID++
 
-			// default is true
-			//conn.SetNoDelay(true)
-
 			// handle connection
 			go func(svr *Server, sessionID uint64, conn *net.TCPConn) {
-				session := base.NewTcpSession(sessionID, conn)
+				session := NewTcpSession(sessionID, conn)
 
 				// do some hook
 				for _, connectHook := range svr.connectHookList {
@@ -99,4 +96,30 @@ func (t *tcp) Start() error {
 func (t *tcp) Stop() {
 	t.stopFlag = true
 	t.stopChan <- struct{}{}
+}
+
+// --------------------------------------------------
+//type UdpSession TcpSession
+type TcpSession struct {
+	base.BasicSession
+	conn net.Conn
+}
+
+func NewTcpSession(sessionID uint64, conn net.Conn) *TcpSession {
+	return &TcpSession{
+		BasicSession: *base.NewBasicSession(sessionID),
+		conn:         conn,
+	}
+}
+
+func (ts *TcpSession) Write(data []byte) (int, error) {
+	return ts.conn.Write(data)
+}
+
+func (ts *TcpSession) Read(p []byte) (n int, err error) {
+	return ts.conn.Read(p)
+}
+
+func (ts *TcpSession) Close() error {
+	return ts.conn.Close()
 }

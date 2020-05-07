@@ -69,7 +69,7 @@ func (ws *ws) websocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := atomic.AddUint64(&ws.id, 1)
 
-	session := base.NewWsSession(sessionID, conn)
+	session := NewWsSession(sessionID, conn)
 
 	// do some hook
 	for _, connectHook := range ws.svr.connectHookList {
@@ -83,5 +83,39 @@ func (ws *ws) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	for _, connectHook := range ws.svr.disconnectHookList {
 		connectHook(session)
 	}
+}
 
+// ------------------------------------------
+type WsSession struct {
+	base.BasicSession
+	conn *websocket.Conn
+}
+
+func NewWsSession(sessionID uint64, conn *websocket.Conn) *WsSession {
+	return &WsSession{
+		BasicSession: *base.NewBasicSession(sessionID),
+		conn:         conn,
+	}
+}
+
+func (ws *WsSession) Write(data []byte) (int, error) {
+	return len(data), ws.conn.WriteMessage(websocket.BinaryMessage, data)
+}
+
+func (ws *WsSession) ReadPacket() (p []byte, err error) {
+	mt, message, err := ws.conn.ReadMessage()
+	if err != nil {
+		return nil, err
+	}
+
+	if mt != websocket.BinaryMessage {
+		// todo: handle error
+		return nil, fmt.Errorf("invalid websocket messageType : %d", mt)
+	}
+
+	return message, nil
+}
+
+func (ws *WsSession) Close() error {
+	return ws.conn.Close()
 }
