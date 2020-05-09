@@ -1,26 +1,23 @@
-package server
+package qnet
 
 import (
 	"errors"
 	"fmt"
-
-	"github.com/overtalk/qnet/base"
-	"github.com/overtalk/qnet/iface"
 )
 
 type Server struct {
-	stream             bool
+	protocolType       ProtoType
 	msgRouter          *msgRouter
-	sessionManager     *base.SessionManager
-	server             iface.IServer
-	handler            iface.Handler
-	connectHookList    []iface.Handler
-	disconnectHookList []iface.Handler
+	sessionManager     *SessionManager
+	server             IServer
+	handler            SessionHandler
+	connectHookList    []SessionHandler
+	disconnectHookList []SessionHandler
 }
 
 type Option func(svr *Server) error
 
-func WithMsgRouter(length base.HeadLength, decoderFunc base.HeadDeserializeFunc) Option {
+func WithMsgRouter(length HeadLength, decoderFunc HeadDeserializeFunc, headSerializeFunc HeadSerializeFunc) Option {
 	return func(svr *Server) error {
 		if svr.msgRouter != nil {
 			return errors.New("repetitive server msgRouter")
@@ -30,14 +27,14 @@ func WithMsgRouter(length base.HeadLength, decoderFunc base.HeadDeserializeFunc)
 			return errors.New("repetitive server message handler")
 		}
 
-		decoder := newMsgRouter(length, decoderFunc)
+		decoder := newMsgRouter(length, decoderFunc, headSerializeFunc)
 		svr.msgRouter = decoder
 		//svr.handler = decoder.streamMsgHandler
 		return nil
 	}
 }
 
-func WithHandler(h iface.Handler) Option {
+func WithHandler(h SessionHandler) Option {
 	return func(svr *Server) error {
 		if svr.handler != nil {
 			return errors.New("repetitive server message handler")
@@ -48,7 +45,7 @@ func WithHandler(h iface.Handler) Option {
 	}
 }
 
-func WithConnectHook(handlers ...iface.Handler) Option {
+func WithConnectHook(handlers ...SessionHandler) Option {
 	return func(svr *Server) error {
 		for _, hook := range handlers {
 			svr.connectHookList = append(svr.connectHookList, hook)
@@ -57,7 +54,7 @@ func WithConnectHook(handlers ...iface.Handler) Option {
 	}
 }
 
-func WithDisconnectHook(handlers ...iface.Handler) Option {
+func WithDisconnectHook(handlers ...SessionHandler) Option {
 	return func(svr *Server) error {
 		for _, hook := range handlers {
 			svr.disconnectHookList = append(svr.disconnectHookList, hook)
@@ -72,7 +69,7 @@ func WithURL(url string) Option {
 			return errors.New("repetitive server endpoint")
 		}
 
-		ep, err := base.NewFromString(url)
+		ep, err := NewFromString(url)
 		if err != nil {
 			return err
 		}
@@ -81,33 +78,33 @@ func WithURL(url string) Option {
 	}
 }
 
-func WithEndPoint(ep *base.Endpoint) Option {
+func WithEndPoint(ep *Endpoint) Option {
 	return func(svr *Server) error {
 		if svr.server != nil {
 			return errors.New("repetitive server endpoint")
 		}
 
+		svr.protocolType = ep.Proto()
 		switch ep.Proto() {
-		case base.ProtoTypeTcp:
+		case ProtoTypeTcp:
 			s, err := newTcp(ep, svr)
 			if err != nil {
 				return err
 			}
 			svr.server = s
-			svr.stream = true
 			// add default tcp hook
-			svr.sessionManager = base.NewSessionManager()
+			svr.sessionManager = NewSessionManager()
 			svr.connectHookList = append(svr.connectHookList, svr.defaultConnectedHook)
 			svr.disconnectHookList = append(svr.disconnectHookList, svr.defaultDisconnectedHook)
-		case base.ProtoTypeUdp:
+		case ProtoTypeUdp:
 			s, err := newUdp(ep, svr)
 			if err != nil {
 				return err
 			}
 			svr.server = s
-		case base.ProtoTypeWs:
+		case ProtoTypeWs:
 			svr.server = newWS(ep, svr)
-			svr.sessionManager = base.NewSessionManager()
+			svr.sessionManager = NewSessionManager()
 			svr.connectHookList = append(svr.connectHookList, svr.defaultConnectedHook)
 			svr.disconnectHookList = append(svr.disconnectHookList, svr.defaultDisconnectedHook)
 		default:
@@ -136,11 +133,11 @@ func (svr *Server) Start() error {
 			return errors.New("message handler is nil")
 		}
 
-		if svr.stream {
-			svr.handler = svr.msgRouter.streamMsgHandler
-		} else {
-			svr.handler = svr.msgRouter.packetMsgHandler
+		h, err := svr.msgRouter.getHandler(svr.protocolType)
+		if err != nil {
+			return err
 		}
+		svr.handler = h
 	}
 
 	if svr.server == nil {
@@ -155,7 +152,7 @@ func (svr *Server) Stop() {
 	svr.sessionManager.ClearSession()
 }
 
-func (svr *Server) RegisterMsgHandler(id uint16, handler iface.MsgHandler) error {
+func (svr *Server) RegisterMsgHandler(id uint16, handler MsgHandler) error {
 	if svr.msgRouter == nil {
 		return errors.New("msgRouter is absent")
 	}
@@ -192,11 +189,11 @@ func (svr *Server) GetSessionMeta(sessionID uint64, key string) (interface{}, er
 }
 
 // ----------------------- hook ---------------------------
-func (svr *Server) defaultConnectedHook(session base.Session) {
+func (svr *Server) defaultConnectedHook(session Session) {
 	svr.sessionManager.Add(session)
 }
 
-func (svr *Server) defaultDisconnectedHook(session base.Session) {
+func (svr *Server) defaultDisconnectedHook(session Session) {
 	session.Close()
 	svr.sessionManager.Remove(session.GetSessionID())
 }

@@ -1,4 +1,4 @@
-package base
+package qnet
 
 import (
 	"encoding/binary"
@@ -7,6 +7,7 @@ import (
 
 type HeadLength uint32
 type HeadDeserializeFunc func(data []byte) (NetHead, error)
+type HeadSerializeFunc func(head NetHead) []byte
 
 const (
 	CSHeadLength HeadLength = 6  // cs head
@@ -28,19 +29,19 @@ type NetHead interface {
 	SetDstBusID(value uint32)
 }
 
-type BaseNetHead struct{}
+type BasicNetHead struct{}
 
-func (head *BaseNetHead) GetMsgID() uint16     { return 0 }
-func (head *BaseNetHead) GetMsgLength() uint32 { return 0 }
-func (head *BaseNetHead) GetActorID() uint64   { return 0 }
-func (head *BaseNetHead) GetSrcBusID() uint32  { return 0 }
-func (head *BaseNetHead) GetDstBusID() uint32  { return 0 }
+func (head *BasicNetHead) GetMsgID() uint16     { return 0 }
+func (head *BasicNetHead) GetMsgLength() uint32 { return 0 }
+func (head *BasicNetHead) GetActorID() uint64   { return 0 }
+func (head *BasicNetHead) GetSrcBusID() uint32  { return 0 }
+func (head *BasicNetHead) GetDstBusID() uint32  { return 0 }
 
-func (head *BaseNetHead) SetMsgID(value uint16)     {}
-func (head *BaseNetHead) SetMsgLength(value uint32) {}
-func (head *BaseNetHead) SetActorID(value uint64)   {}
-func (head *BaseNetHead) SetSrcBusID(value uint32)  {}
-func (head *BaseNetHead) SetDstBusID(value uint32)  {}
+func (head *BasicNetHead) SetMsgID(value uint16)     {}
+func (head *BasicNetHead) SetMsgLength(value uint32) {}
+func (head *BasicNetHead) SetActorID(value uint64)   {}
+func (head *BasicNetHead) SetSrcBusID(value uint32)  {}
+func (head *BasicNetHead) SetDstBusID(value uint32)  {}
 
 /*
 | msg id | msg len |
@@ -60,6 +61,13 @@ func CSMsgHeadDeserializer(data []byte) (NetHead, error) {
 		id:     binary.BigEndian.Uint16(data[:2]),
 		length: binary.BigEndian.Uint32(data[2:CSHeadLength]),
 	}, nil
+}
+
+func CSMsgHeadSerializer(head NetHead) []byte {
+	buf := make([]byte, head.GetMsgLength())
+	binary.BigEndian.PutUint16(buf[:2], head.GetMsgID())
+	binary.BigEndian.PutUint32(buf[2:], head.GetMsgLength())
+	return buf
 }
 
 func (head *CSMsgHead) GetMsgID() uint16     { return head.id }
@@ -98,6 +106,16 @@ func SSMsgHeadDeserializer(data []byte) (NetHead, error) {
 		srcBusID: binary.BigEndian.Uint32(data[CSHeadLength+8 : CSHeadLength+12]),
 		dstBusID: binary.BigEndian.Uint32(data[CSHeadLength+12:]),
 	}, nil
+}
+
+func SSMsgHeadSerializer(head NetHead) []byte {
+	buf := make([]byte, head.GetMsgLength())
+	binary.BigEndian.PutUint16(buf[:2], head.GetMsgID())
+	binary.BigEndian.PutUint32(buf[2:CSHeadLength], head.GetMsgLength())
+	binary.BigEndian.PutUint64(buf[CSHeadLength:CSHeadLength+8], head.GetActorID())
+	binary.BigEndian.PutUint32(buf[CSHeadLength+8:CSHeadLength+12], head.GetSrcBusID())
+	binary.BigEndian.PutUint32(buf[CSHeadLength+12:], head.GetDstBusID())
+	return buf
 }
 
 func (head *SSMsgHead) GetMsgID() uint16     { return head.id }

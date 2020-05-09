@@ -1,22 +1,20 @@
-package server
+package qnet
 
 import (
 	"errors"
 	"fmt"
 	"net"
-
-	"github.com/overtalk/qnet/base"
 )
 
 type tcp struct {
 	svr      *Server
-	ep       *base.Endpoint   // endpoint
+	ep       *Endpoint        // endpoint
 	listener *net.TCPListener // for tcp
 	stopFlag bool
 	stopChan chan interface{} // close signal channel
 }
 
-func newTcp(ep *base.Endpoint, svr *Server) (*tcp, error) {
+func newTcp(ep *Endpoint, svr *Server) (*tcp, error) {
 	addr, err := ep.TCPAddr()
 	if err != nil {
 		return nil, err
@@ -101,13 +99,13 @@ func (t *tcp) Stop() {
 // --------------------------------------------------
 //type UdpSession TcpSession
 type TcpSession struct {
-	base.BasicSession
+	BasicSession
 	conn net.Conn
 }
 
 func NewTcpSession(sessionID uint64, conn net.Conn) *TcpSession {
 	return &TcpSession{
-		BasicSession: *base.NewBasicSession(sessionID),
+		BasicSession: *NewBasicSession(sessionID),
 		conn:         conn,
 	}
 }

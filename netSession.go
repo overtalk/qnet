@@ -1,15 +1,18 @@
-package base
+package qnet
 
 import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 )
 
 type Session interface {
-	io.Reader
+	io.Reader // for tcp
 	io.Writer
-	ReadPacket() (p []byte, err error)
+	ReadFromUDP(b []byte) (int, *net.UDPAddr, error) // for udp
+	WriteToUDP(b []byte, addr *net.UDPAddr) (int, error)
+	ReadPacket() (p []byte, err error) // for ws
 	GetSessionID() uint64
 	SetMeta(key string, value interface{})
 	GetMeta(key string) (interface{}, error)
@@ -56,4 +59,12 @@ func (bs *BasicSession) Read(p []byte) (n int, err error) {
 
 func (bs *BasicSession) ReadPacket() (p []byte, err error) {
 	return nil, errors.New("readMessage func is unrealized")
+}
+
+func (bs *BasicSession) ReadFromUDP(b []byte) (int, *net.UDPAddr, error) {
+	return 0, nil, errors.New("ReadFromUDP func is unrealized")
+}
+
+func (bs *BasicSession) WriteToUDP(b []byte, addr *net.UDPAddr) (int, error) {
+	return 0, errors.New("WriteToUDP func is unrealized")
 }

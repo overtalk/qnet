@@ -1,4 +1,4 @@
-package server
+package qnet
 
 import (
 	"fmt"
@@ -7,8 +7,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rs/cors"
-
-	"github.com/overtalk/qnet/base"
 )
 
 var upgrade = websocket.Upgrader{
@@ -20,13 +18,13 @@ var upgrade = websocket.Upgrader{
 type ws struct {
 	id       uint64
 	svr      *Server
-	ep       *base.Endpoint // endpoint
+	ep       *Endpoint // endpoint
 	wsServer http.Server
 	stopFlag bool
 	stopChan chan interface{} // close signal channel
 }
 
-func newWS(ep *base.Endpoint, svr *Server) *ws {
+func newWS(ep *Endpoint, svr *Server) *ws {
 	ws := &ws{
 		ep:       ep,
 		svr:      svr,
@@ -87,13 +85,13 @@ func (ws *ws) websocketHandler(w http.ResponseWriter, r *http.Request) {
 
 // ------------------------------------------
 type WsSession struct {
-	base.BasicSession
+	BasicSession
 	conn *websocket.Conn
 }
 
 func NewWsSession(sessionID uint64, conn *websocket.Conn) *WsSession {
 	return &WsSession{
-		BasicSession: *base.NewBasicSession(sessionID),
+		BasicSession: *NewBasicSession(sessionID),
 		conn:         conn,
 	}
 }

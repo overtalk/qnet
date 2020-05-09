@@ -1,4 +1,4 @@
-package base
+package qnet
 
 type NetMsg struct {
 	head    NetHead
