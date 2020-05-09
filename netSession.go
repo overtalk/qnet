@@ -3,20 +3,33 @@ package qnet
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net"
 )
 
+var ErrUnrealized = errors.New("unrealized function")
+
 type Session interface {
-	io.Reader // for tcp
-	io.Writer
-	ReadFromUDP(b []byte) (int, *net.UDPAddr, error) // for udp
-	WriteToUDP(b []byte, addr *net.UDPAddr) (int, error)
-	ReadPacket() (p []byte, err error) // for ws
+	// common
 	GetSessionID() uint64
 	SetMeta(key string, value interface{})
 	GetMeta(key string) (interface{}, error)
 	Close() error
+
+	// tcp
+	TcpRead(p []byte) (n int, err error)
+	TcpWrite(p []byte) (n int, err error)
+
+	// udp
+	UdpRead(b []byte) (int, *net.UDPAddr, error)
+	UdpWrite(b []byte, addr *net.UDPAddr) (int, error)
+
+	// ws
+	WsRead() (messageType int, data []byte, err error)
+	WsWrite(messageType int, data []byte) error
+
+	// for msg router, all kind of protocol include
+	GetNetMsg(length HeadLength, decoderFunc HeadDeserializeFunc) (*NetMsg, *net.UDPAddr, error)
+	SendNetMsg(headSerializeFunc HeadSerializeFunc, msg *NetMsg, addr *net.UDPAddr) error
 }
 
 // --------------------------------------------------
@@ -32,14 +45,9 @@ func NewBasicSession(sessionID uint64) *BasicSession {
 	}
 }
 
-func (bs *BasicSession) GetSessionID() uint64 {
-	return bs.sessionID
-}
-
-func (bs *BasicSession) SetMeta(key string, value interface{}) {
-	bs.metas[key] = value
-}
-
+// common
+func (bs *BasicSession) GetSessionID() uint64                  { return bs.sessionID }
+func (bs *BasicSession) SetMeta(key string, value interface{}) { bs.metas[key] = value }
 func (bs *BasicSession) GetMeta(key string) (interface{}, error) {
 	value, flag := bs.metas[key]
 	if !flag {
@@ -49,22 +57,22 @@ func (bs *BasicSession) GetMeta(key string) (interface{}, error) {
 	return value, nil
 }
 
-func (bs *BasicSession) Write(data []byte) (int, error) {
-	return 0, errors.New("write func is unrealized")
-}
+// tcp
+func (bs *BasicSession) TcpWrite(data []byte) (int, error)   { return 0, ErrUnrealized }
+func (bs *BasicSession) TcpRead(p []byte) (n int, err error) { return 0, ErrUnrealized }
 
-func (bs *BasicSession) Read(p []byte) (n int, err error) {
-	return 0, errors.New("read func is unrealized")
-}
+// ws
+func (bs *BasicSession) WsRead() (t int, data []byte, err error)    { return 0, nil, ErrUnrealized }
+func (bs *BasicSession) WsWrite(messageType int, data []byte) error { return ErrUnrealized }
 
-func (bs *BasicSession) ReadPacket() (p []byte, err error) {
-	return nil, errors.New("readMessage func is unrealized")
-}
+// udp
+func (bs *BasicSession) UdpRead(b []byte) (int, *net.UDPAddr, error)       { return 0, nil, ErrUnrealized }
+func (bs *BasicSession) UdpWrite(b []byte, addr *net.UDPAddr) (int, error) { return 0, ErrUnrealized }
 
-func (bs *BasicSession) ReadFromUDP(b []byte) (int, *net.UDPAddr, error) {
-	return 0, nil, errors.New("ReadFromUDP func is unrealized")
+// for net message
+func (bs *BasicSession) GetNetMsg(length HeadLength, decoderFunc HeadDeserializeFunc) (*NetMsg, *net.UDPAddr, error) {
+	return nil, nil, ErrUnrealized
 }
-
-func (bs *BasicSession) WriteToUDP(b []byte, addr *net.UDPAddr) (int, error) {
-	return 0, errors.New("WriteToUDP func is unrealized")
+func (bs *BasicSession) SendNetMsg(headSerializeFunc HeadSerializeFunc, msg *NetMsg, addr *net.UDPAddr) error {
+	return ErrUnrealized
 }

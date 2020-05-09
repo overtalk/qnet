@@ -29,7 +29,7 @@ func WithMsgRouter(length HeadLength, decoderFunc HeadDeserializeFunc, headSeria
 
 		decoder := newMsgRouter(length, decoderFunc, headSerializeFunc)
 		svr.msgRouter = decoder
-		//svr.handler = decoder.streamMsgHandler
+		svr.handler = decoder.handle
 		return nil
 	}
 }
@@ -129,15 +129,7 @@ func NewServer(options ...Option) (*Server, error) {
 
 func (svr *Server) Start() error {
 	if svr.handler == nil {
-		if svr.msgRouter == nil {
-			return errors.New("message handler is nil")
-		}
-
-		h, err := svr.msgRouter.getHandler(svr.protocolType)
-		if err != nil {
-			return err
-		}
-		svr.handler = h
+		return errors.New("message handler is nil")
 	}
 
 	if svr.server == nil {
@@ -158,15 +150,6 @@ func (svr *Server) RegisterMsgHandler(id uint16, handler MsgHandler) error {
 	}
 
 	return svr.msgRouter.registerMsgHandler(id, handler)
-}
-
-func (svr *Server) SendBySessionID(sessionID uint64, data []byte) (int, error) {
-	session, err := svr.sessionManager.Get(sessionID)
-	if err != nil {
-		return 0, err
-	}
-
-	return session.Write(data)
 }
 
 func (svr *Server) SetSessionMeta(sessionID uint64, key string, value interface{}) error {

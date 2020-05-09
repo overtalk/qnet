@@ -2,6 +2,7 @@ package qnet
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"sync/atomic"
 
@@ -96,11 +97,15 @@ func NewWsSession(sessionID uint64, conn *websocket.Conn) *WsSession {
 	}
 }
 
-func (ws *WsSession) Write(data []byte) (int, error) {
+func (ws *WsSession) WsRead() (messageType int, data []byte, err error) { return ws.conn.ReadMessage() }
+func (ws *WsSession) WsWrite(t int, data []byte) error                  { return ws.conn.WriteMessage(t, data) }
+func (ws *WsSession) Close() error                                      { return ws.conn.Close() }
+
+func (ws *WsSession) WriteBinaryMessage(data []byte) (int, error) {
 	return len(data), ws.conn.WriteMessage(websocket.BinaryMessage, data)
 }
 
-func (ws *WsSession) ReadPacket() (p []byte, err error) {
+func (ws *WsSession) ReadBinaryMessage() ([]byte, error) {
 	mt, message, err := ws.conn.ReadMessage()
 	if err != nil {
 		return nil, err
@@ -114,6 +119,25 @@ func (ws *WsSession) ReadPacket() (p []byte, err error) {
 	return message, nil
 }
 
-func (ws *WsSession) Close() error {
-	return ws.conn.Close()
+// for msg router
+func (ws *WsSession) GetNetMsg(length HeadLength, decoderFunc HeadDeserializeFunc) (*NetMsg, *net.UDPAddr, error) {
+	packet, err := ws.ReadBinaryMessage()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// decode head
+	head, err := decoderFunc(packet[:length])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return NewNetMsg(head, packet[length:]), nil, nil
+}
+func (ws *WsSession) SendNetMsg(headSerializeFunc HeadSerializeFunc, msg *NetMsg, _ *net.UDPAddr) error {
+	bytes := headSerializeFunc(msg)
+	bytes = append(bytes, msg.GetMsg()...)
+	_, err := ws.WriteBinaryMessage(bytes)
+	return err
+
 }

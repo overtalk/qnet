@@ -59,14 +59,29 @@ func NewUdpSession(sessionID uint64, conn *net.UDPConn) *UdpSession {
 	}
 }
 
-func (us *UdpSession) WriteToUDP(b []byte, addr *net.UDPAddr) (int, error) {
-	return us.conn.WriteToUDP(b, addr)
+func (us *UdpSession) Close() error                                   { return us.conn.Close() }
+func (us *UdpSession) UdpWrite(b []byte, a *net.UDPAddr) (int, error) { return us.conn.WriteToUDP(b, a) }
+func (us *UdpSession) UdpRead(b []byte) (int, *net.UDPAddr, error)    { return us.conn.ReadFromUDP(b) }
+
+func (us *UdpSession) GetNetMsg(length HeadLength, decoderFunc HeadDeserializeFunc) (*NetMsg, *net.UDPAddr, error) {
+	packet := make([]byte, 1024)
+	n, remoteAddr, err := us.UdpRead(packet)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// decode head
+	head, err := decoderFunc(packet[:length])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return NewNetMsg(head, packet[length:n]), remoteAddr, nil
 }
 
-func (us *UdpSession) ReadFromUDP(b []byte) (int, *net.UDPAddr, error) {
-	return us.conn.ReadFromUDP(b)
-}
-
-func (us *UdpSession) Close() error {
-	return us.conn.Close()
+func (us *UdpSession) SendNetMsg(headSerializeFunc HeadSerializeFunc, msg *NetMsg, addr *net.UDPAddr) error {
+	bytes := headSerializeFunc(msg)
+	bytes = append(bytes, msg.GetMsg()...)
+	_, err := us.UdpWrite(bytes, addr)
+	return err
 }

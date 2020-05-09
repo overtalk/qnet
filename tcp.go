@@ -3,6 +3,7 @@ package qnet
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 )
 
@@ -110,14 +111,37 @@ func NewTcpSession(sessionID uint64, conn net.Conn) *TcpSession {
 	}
 }
 
-func (ts *TcpSession) Write(data []byte) (int, error) {
-	return ts.conn.Write(data)
+func (ts *TcpSession) Close() error                        { return ts.conn.Close() }
+func (ts *TcpSession) Write(p []byte) (n int, err error)   { return ts.TcpWrite(p) }
+func (ts *TcpSession) Read(p []byte) (n int, err error)    { return ts.TcpRead(p) }
+func (ts *TcpSession) TcpWrite(data []byte) (int, error)   { return ts.conn.Write(data) }
+func (ts *TcpSession) TcpRead(p []byte) (n int, err error) { return ts.conn.Read(p) }
+
+// for msg router
+// second flag in return means exit
+func (ts *TcpSession) GetNetMsg(length HeadLength, decoderFunc HeadDeserializeFunc) (*NetMsg, *net.UDPAddr, error) {
+	// decode head
+	headerBytes := make([]byte, length)
+	if _, err := io.ReadFull(ts, headerBytes); err != nil {
+		return nil, nil, err
+	}
+
+	head, err := decoderFunc(headerBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bodyByte := make([]byte, head.GetMsgLength())
+	if _, err := io.ReadFull(ts, bodyByte); err != nil {
+		return nil, nil, err
+	}
+
+	return NewNetMsg(head, bodyByte), nil, nil
 }
 
-func (ts *TcpSession) Read(p []byte) (n int, err error) {
-	return ts.conn.Read(p)
-}
-
-func (ts *TcpSession) Close() error {
-	return ts.conn.Close()
+func (ts *TcpSession) SendNetMsg(headSerializeFunc HeadSerializeFunc, msg *NetMsg, _ *net.UDPAddr) error {
+	bytes := headSerializeFunc(msg)
+	bytes = append(bytes, msg.GetMsg()...)
+	_, err := ts.Write(bytes)
+	return err
 }
