@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	github.com/gorilla/websocket v1.4.2
+	github.com/panjf2000/gnet v1.1.5
 	github.com/rs/cors v1.7.0
 	github.com/spf13/cast v1.3.1
 )
