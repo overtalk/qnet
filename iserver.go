@@ -16,10 +16,20 @@ type IServer interface {
 }
 
 // ----------------------------------------
+
 type (
 	Action = gnet.Action
 	Conn   = gnet.Conn
 )
+
+type Logic func(msg *NetMsg, c Conn) *NetMsg
+
+type INetMsgRouter interface {
+	RegisterMsgHandler(id uint16, handler Logic)
+	DecodeNetMsg(data []byte) (*NetMsg, error)
+	EncodeNetMsg(msg *NetMsg) []byte
+	React(frame []byte, c Conn) (out []byte, action Action)
+}
 
 type IEventHandler interface {
 	// OnInitComplete fires when the server is ready for accepting connections.

@@ -8,15 +8,6 @@ import (
 	"github.com/panjf2000/gnet"
 )
 
-type Logic func(msg *NetMsg, c Conn) *NetMsg
-
-type INetMsgCodec interface {
-	RegisterMsgHandler(id uint16, handler Logic)
-	DecodeNetMsg(data []byte) (*NetMsg, error)
-	EncodeNetMsg(msg *NetMsg) []byte
-	React(frame []byte, c Conn) (out []byte, action Action)
-}
-
 type BasicNetMsgCodec struct {
 	handlerMap map[uint16]Logic
 }

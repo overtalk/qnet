@@ -8,6 +8,7 @@ import (
 
 func main() {
 	s := qnet.NewNServer().
+		SetURL("tcp://localhost:9999").
 		SetOnClosedFunc(func(c qnet.Conn, err error) qnet.Action {
 			fmt.Println("on close ")
 			return 0
@@ -17,9 +18,8 @@ func main() {
 			return 0
 		}).
 		SetReactFunc(func(frame []byte, c qnet.Conn) ([]byte, qnet.Action) {
-			fmt.Println(string(frame))
+			fmt.Println(c.Context(), string(frame))
 			return frame, 0
 		})
-
 	s.Start()
 }
