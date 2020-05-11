@@ -1,22 +1,20 @@
-package gnet
+package qnet
 
 import (
 	"encoding/binary"
 	"errors"
 	"log"
 
-	"github.com/overtalk/qnet"
 	"github.com/panjf2000/gnet"
 )
 
-type Logic func(msg *qnet.NetMsg, c GNetConn) *qnet.NetMsg
+type Logic func(msg *NetMsg, c Conn) *NetMsg
 
 type INetMsgCodec interface {
-	//gnet.ICodec
 	RegisterMsgHandler(id uint16, handler Logic)
-	DecodeNetMsg(data []byte) (*qnet.NetMsg, error)
-	EncodeNetMsg(msg *qnet.NetMsg) []byte
-	React(frame []byte, c GNetConn) (out []byte, action GNetAction)
+	DecodeNetMsg(data []byte) (*NetMsg, error)
+	EncodeNetMsg(msg *NetMsg) []byte
+	React(frame []byte, c Conn) (out []byte, action Action)
 }
 
 type BasicNetMsgCodec struct {
@@ -63,44 +61,35 @@ func (cs *CSCodec) Decode(c gnet.Conn) ([]byte, error) {
 	return append(head, body...), nil
 }
 
-func (cs *CSCodec) DecodeNetMsg(data []byte) (*qnet.NetMsg, error) {
-	head, err := qnet.CSMsgHeadDeserializer(data[:6])
+func (cs *CSCodec) DecodeNetMsg(data []byte) (*NetMsg, error) {
+	head, err := CSMsgHeadDeserializer(data[:6])
 	if err != nil {
 		return nil, err
 	}
-	return qnet.NewNetMsg(head, data[6:]), nil
+	return NewNetMsg(head, data[6:]), nil
 }
 
-func (cs *CSCodec) EncodeNetMsg(msg *qnet.NetMsg) []byte {
-	return append(qnet.CSMsgHeadSerializer(msg), msg.GetMsg()...)
+func (cs *CSCodec) EncodeNetMsg(msg *NetMsg) []byte {
+	return append(CSMsgHeadSerializer(msg), msg.GetMsg()...)
 }
 
-func (cs *CSCodec) React(frame []byte, c GNetConn) (out []byte, action GNetAction) {
+func (cs *CSCodec) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Action) {
 	msg, err := cs.DecodeNetMsg(frame)
 	if err != nil {
 		//todo:error handle
-		return nil, NoneAction
+		return nil, gnet.None
 	}
 
 	handler, isExist := cs.handlerMap[msg.GetMsgID()]
 	if !isExist {
 		//todo: error handle, return some to client
-		return nil, NoneAction
+		return nil, gnet.None
 	}
 
 	// todo : async
 	if retMsg := handler(msg, c); retMsg != nil {
-		return cs.EncodeNetMsg(retMsg), NoneAction
+		return cs.EncodeNetMsg(retMsg), gnet.None
 	}
 
-	return nil, NoneAction
+	return nil, gnet.None
 }
-
-// ------------------------------------------------------
-type SSCodec struct {
-	BasicNetMsgCodec
-	ByteOrder binary.ByteOrder
-}
-
-func (ss *SSCodec) Decode(c gnet.Conn) ([]byte, error)             { return nil, nil }
-func (ss *SSCodec) Encode(c gnet.Conn, buf []byte) ([]byte, error) { return nil, nil }

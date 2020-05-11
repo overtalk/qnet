@@ -86,14 +86,7 @@ func NewFromString(url string) (*Endpoint, error) {
 }
 
 func (ep *Endpoint) ToString() string {
-	var url string
-	if ep.proto != ProtoTypeUnknown {
-		url += string(ep.proto)
-	}
-
-	url += ep.GetIP() + ":" + cast.ToString(ep.GetPort()) + ep.GetPath()
-
-	return url
+	return fmt.Sprintf("%s://%s:%s", string(ep.proto), ep.GetIP(), cast.ToString(ep.GetPort())+ep.GetPath())
 }
 
 //******* net.Addr ********
