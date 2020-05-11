@@ -3,9 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
-	"time"
-
 	"github.com/overtalk/qnet"
 )
 
@@ -29,56 +26,47 @@ func main() {
 	flag.BoolVar(&ws, "ws", false, "websocket")
 	flag.Parse()
 
-	serverOptions := []qnet.Option{
-		qnet.WithMsgRouter(qnet.HeadLength(0), TestMsgHeadDeserializer, TestMsgSerializeFunc),
-		qnet.WithConnectHook(
-			func(session qnet.Session) {
-				sessionID := session.GetSessionID()
-				fmt.Println("[ConnectHook] session id = ", sessionID)
-			},
-		),
-		qnet.WithDisconnectHook(
-			func(session qnet.Session) {
-				sessionID := session.GetSessionID()
-				fmt.Println("[DisconnectHook] disconnect, session id = ", sessionID)
-			},
-		),
-	}
+	url := ""
 
 	if udp {
 		fmt.Println("udp")
-		serverOptions = append(serverOptions, qnet.WithURL("udp://127.0.0.1:9999"))
+		url = "udp://127.0.0.1:9999"
 	} else {
 		if ws {
 			fmt.Println("ws")
-			serverOptions = append(serverOptions, qnet.WithURL("ws://127.0.0.1:9999/ws"))
+			url = "ws://127.0.0.1:9999/ws"
 		} else {
 			if tcp {
 				fmt.Println("tcp")
-				serverOptions = append(serverOptions, qnet.WithURL("tcp://127.0.0.1:9999"))
+				url = "tcp://127.0.0.1:9999"
 			}
 		}
 	}
 
-	svr, err := qnet.NewServer(serverOptions...)
-	if err != nil {
-		log.Fatal(err)
-	}
+	svr := qnet.NewNServer().
+		SetURL(url).
+		SetOnClosedFunc(func(c qnet.Conn, err error) qnet.Action {
+			fmt.Println("on close ")
+			return 0
+		}).
+		SetOnInitCompleteFunc(func(server interface{}) qnet.Action {
+			fmt.Println("init ")
+			return 0
+		}).
+		SetReactFunc(func(frame []byte, c qnet.Conn) ([]byte, qnet.Action) {
+			fmt.Println(c.Context(), string(frame))
+			return frame, 0
+		})
 
-	if err := svr.RegisterMsgHandler(1, echo); err != nil {
-		log.Fatal(err)
-	}
+	//if err := svr.RegisterMsgHandler(1, echo); err != nil {
+	//	log.Fatal(err)
+	//}
 
-	if err := svr.Start(); err != nil {
-		log.Fatal(err)
-	}
+	svr.Start()
 
-	for {
-		time.Sleep(time.Second)
-	}
 }
 
-func echo(session qnet.Session, msg *qnet.NetMsg) *qnet.NetMsg {
-	fmt.Printf("[%d] - %s\n", session.GetSessionID(), string(msg.GetMsg()))
-	return msg
-}
+//func echo(session qnet.Session, msg *qnet.NetMsg) *qnet.NetMsg {
+//	fmt.Printf("[%d] - %s\n", session.GetSessionID(), string(msg.GetMsg()))
+//	return msg
+//}

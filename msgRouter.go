@@ -1,160 +1,86 @@
 package qnet
 
 import (
-	"fmt"
+	"encoding/binary"
+	"errors"
+	"log"
+
+	"github.com/panjf2000/gnet"
 )
 
-type msgRouter struct {
-	length              HeadLength
-	headDeserializeFunc HeadDeserializeFunc
-	headSerializeFunc   HeadSerializeFunc
-	handlerMap          map[uint16]MsgHandler
+type BasicNetMsgCodec struct {
+	handlerMap map[uint16]Logic
 }
 
-func newMsgRouter(length HeadLength, decoderFunc HeadDeserializeFunc, headSerializeFunc HeadSerializeFunc) *msgRouter {
-	ret := &msgRouter{
-		length:              length,
-		headDeserializeFunc: decoderFunc,
-		headSerializeFunc:   headSerializeFunc,
-		handlerMap:          make(map[uint16]MsgHandler),
+func (codec *BasicNetMsgCodec) RegisterMsgHandler(id uint16, handler Logic) {
+	if _, isExist := codec.handlerMap[id]; isExist {
+		log.Fatalf("message id %d is already registered", id)
 	}
 
-	return ret
+	codec.handlerMap[id] = handler
 }
 
-func (router *msgRouter) registerMsgHandler(id uint16, handler MsgHandler) error {
-	if _, isExist := router.handlerMap[id]; isExist {
-		return fmt.Errorf("message id %d is already registered", id)
+/*
+| msg id | msg len |
+|    2   |    4    | = 6
+*/
+type CSCodec struct {
+	BasicNetMsgCodec
+	byteOrder binary.ByteOrder
+}
+
+func NewCSCodec(big bool) *CSCodec {
+	if big {
+		return &CSCodec{byteOrder: binary.BigEndian}
+	}
+	return &CSCodec{byteOrder: binary.LittleEndian}
+}
+
+func (cs *CSCodec) Encode(c gnet.Conn, buf []byte) ([]byte, error) { return buf, nil }
+
+func (cs *CSCodec) Decode(c gnet.Conn) ([]byte, error) {
+	headSize, head := c.ReadN(6)
+	if headSize != 6 {
+		return nil, errors.New("no net message")
 	}
 
-	router.handlerMap[id] = handler
-	return nil
-}
-
-func (router *msgRouter) handle(session Session) {
-	for {
-		msg, addr, err := session.GetNetMsg(router.length, router.headDeserializeFunc)
-		if err != nil {
-			//todo : error handler
-			break
-		}
-
-		f, flag := router.handlerMap[msg.GetMsgID()]
-		if !flag {
-			// todo: add log
-			continue
-		}
-
-		if retMsg := f(session, msg); retMsg != nil {
-			session.SendNetMsg(router.headSerializeFunc, retMsg, addr)
-		}
+	l := int(cs.byteOrder.Uint32(head[2:]))
+	bodySize, body := c.ReadN(l)
+	if bodySize != l {
+		return nil, errors.New("no net message")
 	}
+	return append(head, body...), nil
 }
 
-//// getHandler return handler for each connection/session
-//func (router *msgRouter) getHandler(t ProtoType) (func(session Session), error) {
-//	switch t {
-//	case ProtoTypeTcp:
-//		return router.tcpMsgHandler, nil
-//	case ProtoTypeUdp:
-//		return router.udpMsgHandler, nil
-//	case ProtoTypeWs:
-//		return router.wsMsgHandler, nil
-//	default:
-//		return nil, fmt.Errorf("invalid protocolType : %s", t)
-//	}
-//}
-//
-//func (router *msgRouter) tcpMsgHandler(session Session) {
-//	for {
-//		// decode head
-//		headerBytes := make([]byte, router.length)
-//		if _, err := io.ReadFull(session, headerBytes); err != nil {
-//			break
-//		}
-//
-//		head, err := router.headDeserializeFunc(headerBytes)
-//		if err != nil {
-//			continue
-//		}
-//
-//		bodyByte := make([]byte, head.GetMsgLength())
-//		if _, err := io.ReadFull(session, bodyByte); err != nil {
-//			//todo: add log
-//			fmt.Println(err)
-//			break
-//		}
-//
-//		msg := NewNetMsg(head, bodyByte)
-//
-//		f, flag := router.handlerMap[msg.GetMsgID()]
-//		if !flag {
-//			// todo: add log
-//			continue
-//		}
-//
-//		if retMsg := f(session, msg); retMsg != nil {
-//			bytes := router.headSerializeFunc(msg)
-//			bytes = append(bytes, msg.GetMsg()...)
-//			session.Write(bytes)
-//		}
-//	}
-//}
-//
-//func (router *msgRouter) wsMsgHandler(session Session) {
-//	for {
-//		msg, err := session.GetNetMsg()
-//		if err != nil {
-//			//todo : error handler
-//			break
-//		}
-//
-//		f, flag := router.handlerMap[msg.GetMsgID()]
-//		if !flag {
-//			// todo: add log
-//			continue
-//		}
-//
-//		if retMsg := f(session, msg); retMsg != nil {
-//			bytes := router.headSerializeFunc(msg)
-//			bytes = append(bytes, msg.GetMsg()...)
-//			session.Write(bytes)
-//		}
-//	}
-//}
-//
-//func (router *msgRouter) udpMsgHandler(session Session) {
-//	for {
-//		packet := make([]byte, 1024)
-//		n, remoteAddr, err := session.ReadFromUDP(packet)
-//		if err != nil {
-//			fmt.Println(err)
-//			// todo: add log
-//			break
-//		}
-//
-//		// decode head
-//		head, err := router.headDeserializeFunc(packet[:router.length])
-//		if err != nil {
-//			continue
-//		}
-//
-//		msg := NewNetMsg(head, packet[router.length:n])
-//
-//		f, flag := router.handlerMap[msg.GetMsgID()]
-//
-//		if !flag {
-//			// todo: add log
-//			continue
-//		}
-//
-//		// for udp, goroutine per packet
-//		go func(session Session, handler MsgHandler, msg *NetMsg, remoteAddr *net.UDPAddr) {
-//			if retMsg := handler(session, msg); retMsg != nil {
-//				bytes := router.headSerializeFunc(msg)
-//				bytes = append(bytes, msg.GetMsg()...)
-//				session.WriteToUDP(bytes, remoteAddr)
-//			}
-//		}(session, f, msg, remoteAddr)
-//	}
-//}
+func (cs *CSCodec) DecodeNetMsg(data []byte) (*NetMsg, error) {
+	head, err := CSMsgHeadDeserializer(data[:6])
+	if err != nil {
+		return nil, err
+	}
+	return NewNetMsg(head, data[6:]), nil
+}
+
+func (cs *CSCodec) EncodeNetMsg(msg *NetMsg) []byte {
+	return append(CSMsgHeadSerializer(msg), msg.GetMsg()...)
+}
+
+func (cs *CSCodec) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Action) {
+	msg, err := cs.DecodeNetMsg(frame)
+	if err != nil {
+		//todo:error handle
+		return nil, gnet.None
+	}
+
+	handler, isExist := cs.handlerMap[msg.GetMsgID()]
+	if !isExist {
+		//todo: error handle, return some to client
+		return nil, gnet.None
+	}
+
+	// todo : async
+	if retMsg := handler(msg, c); retMsg != nil {
+		return cs.EncodeNetMsg(retMsg), gnet.None
+	}
+
+	return nil, gnet.None
+}
