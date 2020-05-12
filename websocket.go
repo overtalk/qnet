@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/rs/cors"
+	"log"
 	"net"
 	"net/http"
 	"sync/atomic"
+	"time"
 )
 
 var upgrade = websocket.Upgrader{
@@ -19,14 +21,12 @@ type webSocketServer struct {
 	svr      *NServer
 	wsServer http.Server
 	stopFlag bool
-	stopChan chan interface{} // close signal channel
 }
 
 func newWebSocketServer(svr *NServer) *webSocketServer {
 	ws := &webSocketServer{
-		svr:      svr,
 		stopFlag: true,
-		stopChan: make(chan interface{}),
+		svr:      svr,
 	}
 
 	mux := http.NewServeMux()
@@ -46,13 +46,28 @@ func newWebSocketServer(svr *NServer) *webSocketServer {
 	return ws
 }
 
-func (ws *webSocketServer) Start() error {
-	return ws.wsServer.ListenAndServe()
+func (ws *webSocketServer) Start() {
+	ws.stopFlag = true
+	ws.svr.onInitComplete(ws)
+	if ws.svr.gNetOption.Ticker {
+		go func() {
+			for {
+				if !ws.stopFlag {
+					break
+				}
+				duration, action := ws.svr.tick()
+				ws.actionHandler(action, nil)
+				time.Sleep(duration)
+			}
+		}()
+	}
+	log.Fatal(ws.wsServer.ListenAndServe())
 }
 
-func (ws *webSocketServer) Stop() {
-	ws.stopFlag = true
-	ws.stopChan <- struct{}{}
+func (ws *webSocketServer) Close() {
+	ws.stopFlag = false
+	ws.wsServer.Close()
+	ws.svr.onShutdown(ws)
 }
 
 func (ws *webSocketServer) webSocketHandler(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +89,7 @@ func (ws *webSocketServer) webSocketHandler(w http.ResponseWriter, r *http.Reque
 	for {
 		mt, message, err := conn.ReadMessage()
 		if err != nil {
+			// todo: handle error
 			break
 		}
 
@@ -86,14 +102,23 @@ func (ws *webSocketServer) webSocketHandler(w http.ResponseWriter, r *http.Reque
 		if retBytes != nil {
 			conn.WriteMessage(websocket.BinaryMessage, retBytes)
 		}
-
-		if action != 0 {
-
-		}
+		ws.actionHandler(action, wsConn)
 	}
 
 	// do some hook
-	ws.svr.onClosed(nil, nil)
+	ws.svr.onClosed(wsConn, nil)
+}
+
+func (ws *webSocketServer) actionHandler(action Action, conn Conn) {
+	switch action {
+	case Close:
+		if conn != nil {
+			ws.svr.CloseConn(conn.Context().(uint64))
+			conn.Close()
+		}
+	case Shutdown:
+		ws.Close()
+	}
 }
 
 // -------------------------------------------------
@@ -106,7 +131,6 @@ type webSocketConn struct {
 func newWebSocketConn(conn *websocket.Conn) *webSocketConn {
 	return &webSocketConn{conn: conn}
 }
-
 func (wc *webSocketConn) Context() (ctx interface{})  { return wc.ctx }
 func (wc *webSocketConn) SetContext(ctx interface{})  { wc.ctx = ctx }
 func (wc *webSocketConn) LocalAddr() (addr net.Addr)  { return wc.conn.LocalAddr() }
@@ -115,7 +139,6 @@ func (wc *webSocketConn) Close() error                { return wc.conn.Close() }
 func (wc *webSocketConn) SendTo(buf []byte) error {
 	return wc.conn.WriteMessage(websocket.BinaryMessage, buf)
 }
-
 func (wc *webSocketConn) Wake() error {
 	wc.svr.React(nil, wc)
 	return nil

@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"time"
+
 	"github.com/overtalk/qnet"
 )
 
@@ -44,29 +46,22 @@ func main() {
 	}
 
 	svr := qnet.NewNServer().
-		SetURL(url).
 		SetOnClosedFunc(func(c qnet.Conn, err error) qnet.Action {
 			fmt.Println("on close ")
-			return 0
+			return qnet.None
 		}).
 		SetOnInitCompleteFunc(func(server interface{}) qnet.Action {
 			fmt.Println("init ")
-			return 0
+			return qnet.None
 		}).
 		SetReactFunc(func(frame []byte, c qnet.Conn) ([]byte, qnet.Action) {
 			fmt.Println(c.Context(), string(frame))
-			return frame, 0
-		})
-
-	//if err := svr.RegisterMsgHandler(1, echo); err != nil {
-	//	log.Fatal(err)
-	//}
+			return frame, qnet.Close
+		}).
+		SetTickFunc(func() (time.Duration, qnet.Action) {
+			fmt.Println("ticker func")
+			return time.Second, qnet.None
+		}).SetURL(url)
 
 	svr.Start()
-
 }
-
-//func echo(session qnet.Session, msg *qnet.NetMsg) *qnet.NetMsg {
-//	fmt.Printf("[%d] - %s\n", session.GetSessionID(), string(msg.GetMsg()))
-//	return msg
-//}

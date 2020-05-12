@@ -1,12 +1,9 @@
 package qnet
 
 import (
+	"github.com/panjf2000/gnet"
 	"log"
 	"sync"
-	"sync/atomic"
-	"time"
-
-	"github.com/panjf2000/gnet"
 )
 
 type NServer struct {
@@ -18,10 +15,10 @@ type NServer struct {
 	// msg router
 	msgRouterSwitch bool
 	msgRouter       INetMsgRouter
-	// ws server
-	wsServer *webSocketServer
 
-	options *gnet.Options
+	gNetOption *gnet.Options
+	gNetServer *gNetServer
+	wsServer   *webSocketServer
 }
 
 func NewNServer() *NServer {
@@ -39,46 +36,25 @@ func (svr *NServer) Start() {
 		svr.wsServer = newWebSocketServer(svr)
 		svr.wsServer.Start()
 	case ProtoTypeTcp, ProtoTypeUdp:
-		if svr.options != nil {
-			gnet.Serve(svr, svr.ep.ToString(), gnet.WithOptions(*svr.options))
-		} else {
-			gnet.Serve(svr, svr.ep.ToString())
-		}
+		svr.gNetServer = newGNetServer(svr)
+		svr.gNetServer.Start()
 	default:
 		log.Fatal("invalid net protocol : ", svr.ep.Proto())
 	}
 }
 
-// for gnet
-func (svr *NServer) OnInitComplete(server gnet.Server) Action { return svr.onInitComplete(server) }
-func (svr *NServer) OnShutdown(server interface{})            { svr.onShutdown(server) }
-func (svr *NServer) OnOpened(c Conn) ([]byte, Action) {
-	// add connection
-	id := atomic.AddUint64(&svr.baseID, 1)
-	c.SetContext(id)
-	svr.rwMutex.Lock()
-	svr.connections[id] = c
-	svr.rwMutex.Unlock()
-
-	return svr.onOpened(c)
-}
-func (svr *NServer) OnClosed(c Conn, err error) Action {
-	// delete connections
-	id := c.Context().(uint64)
-	svr.rwMutex.Lock()
-	delete(svr.connections, id)
-	svr.rwMutex.Unlock()
-
-	return svr.onClosed(c, err)
-}
-func (svr *NServer) PreWrite()                                  { svr.preWrite() }
-func (svr *NServer) Tick() (delay time.Duration, action Action) { return svr.tick() }
 func (svr *NServer) React(frame []byte, c Conn) ([]byte, Action) {
 	if svr.msgRouterSwitch {
 		// todo: use msg router
 		return svr.msgRouter.React(frame, c)
 	}
 	return svr.react(frame, c)
+}
+
+func (svr *NServer) CloseConn(id uint64) {
+	svr.rwMutex.Lock()
+	delete(svr.connections, id)
+	svr.rwMutex.Unlock()
 }
 
 // chained-mode set func
@@ -104,24 +80,25 @@ func (svr *NServer) setLogicFunc(handler interface{}) *NServer {
 	case ReactFunc:
 		svr.react = handler.(ReactFunc)
 	case TickFunc:
+		svr.SetOption(gnet.WithTicker(true))
 		svr.tick = handler.(TickFunc)
 	default:
 		log.Fatalf("invalid handler : %v\n", handler)
 	}
 	return svr
 }
-
+func (svr *NServer) SetOption(opt gnet.Option) *NServer {
+	if svr.gNetOption == nil {
+		svr.gNetOption = &gnet.Options{}
+	}
+	opt(svr.gNetOption)
+	return svr
+}
 func (svr *NServer) SetMsgRouter(router INetMsgRouter) *NServer {
 	svr.msgRouterSwitch = true
 	svr.msgRouter = router
 	return svr
 }
-
-func (svr *NServer) SetGNetOptions(option *gnet.Options) *NServer {
-	svr.options = option
-	return svr
-}
-
 func (svr *NServer) SetURL(url string) *NServer {
 	ep, err := NewFromString(url)
 	if err != nil {
@@ -130,7 +107,6 @@ func (svr *NServer) SetURL(url string) *NServer {
 	svr.ep = ep
 	return svr
 }
-
 func (svr *NServer) RegisterMsgHandler(id uint16, handler Logic) *NServer {
 	if svr.msgRouter == nil {
 		log.Fatal("the codec for server is absent")

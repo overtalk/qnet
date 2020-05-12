@@ -13,6 +13,12 @@ type INetMsgRouter interface {
 	React(frame []byte, c Conn) (out []byte, action Action)
 }
 
+var (
+	None     = gnet.None
+	Close    = gnet.Close
+	Shutdown = gnet.Shutdown
+)
+
 type (
 	Action = gnet.Action
 	Conn   = gnet.Conn
