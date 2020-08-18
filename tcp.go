@@ -1,147 +1,88 @@
 package qnet
 
 import (
-	"errors"
-	"fmt"
-	"io"
 	"net"
+	"os"
+	"time"
 )
 
-type tcp struct {
-	svr      *Server
-	ep       *Endpoint        // endpoint
-	listener *net.TCPListener // for tcp
-	stopFlag bool
-	stopChan chan interface{} // close signal channel
+// HandlerFunc a Handler wrapper
+type HandlerFunc func(net.Conn)
+
+type TcpServer struct {
+	name    string      // listener's name
+	network string      // eg: unix/tcp, see net.Dial
+	address string      // eg: socket/ip:port, see net.Dial
+	chmod   os.FileMode // file mode for unix socket, default 0666
+	maxConn int         // listener's maximum connection number
+	// if ReadSynced is true, when Listener is closed, all its connections
+	// will not read any data. But it may be removed as a default option
+	// that it's always stop reading data.
+	readSynced bool
+
+	connHandler HandlerFunc
 }
 
-func newTcp(ep *Endpoint, svr *Server) (*tcp, error) {
-	addr, err := ep.TCPAddr()
-	if err != nil {
-		return nil, err
+func NewService(name, addr string, handler HandlerFunc) *TcpServer {
+	return &TcpServer{
+		name:        name,
+		network:     "tcp",
+		address:     addr,
+		maxConn:     0,
+		readSynced:  false,
+		connHandler: handler,
 	}
-
-	ln, err := net.ListenTCP(string(ep.Proto()), addr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tcp{
-		ep:       ep,
-		svr:      svr,
-		listener: ln,
-		stopChan: make(chan interface{}),
-	}, nil
 }
 
-func (t *tcp) Start() error {
-	if t.listener == nil {
-		return errors.New("tcp listener is nil")
-	}
+// GetName get the service name
+func (ts *TcpServer) GetName() string { return ts.name }
 
-	go func(t *tcp) {
-		<-t.stopChan
-		// TODO: change log
-		fmt.Println("Stop Tcp Server ...")
-		if err := t.listener.Close(); err != nil {
-			// TODO: change log
-			fmt.Println(err)
+// NewListener create a service listener
+func (ts *TcpServer) NewListener() (net.Listener, error) {
+	if ts.network == "unix" {
+		os.Remove(ts.address)
+	}
+	l, err := net.Listen(ts.network, ts.address)
+	if err != nil {
+		// handle error
+		return nil, err
+	}
+	if ts.network == "unix" {
+		chmod := ts.chmod
+		if chmod == 0 {
+			chmod = 0666
 		}
-	}(t)
+		os.Chmod(ts.address, chmod)
+	}
+	return l, nil
+}
 
-	t.stopFlag = false
-
-	go func() {
-		var baseSessionID uint64 = 0
-		for {
-			conn, err := t.listener.AcceptTCP()
-			if err != nil {
-				if t.stopFlag {
-					// TODO: change log
-					fmt.Println("stop listen :", err.Error())
-					break
+// Serve service logic
+func (ts *TcpServer) Serve(l net.Listener) {
+	//TODO：add log
+	var tempDelay time.Duration
+	for {
+		// wait for a network connection
+		conn, err := l.Accept()
+		if err != nil {
+			// referenced from $GOROOT/src/net/http/server.go:Serve()
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				if tempDelay == 0 {
+					tempDelay = 5 * time.Millisecond
+				} else {
+					tempDelay *= 2
 				}
-				// TODO: change log
-				fmt.Println("failed to accept connection :", err.Error())
+				if max := 1 * time.Second; tempDelay > max {
+					tempDelay = max
+				}
+				time.Sleep(tempDelay)
 				continue
 			}
-
-			// gen session id
-			baseSessionID++
-
-			// handle connection
-			go func(svr *Server, sessionID uint64, conn *net.TCPConn) {
-				session := NewTcpSession(sessionID, conn)
-
-				// do some hook
-				for _, connectHook := range svr.connectHookList {
-					connectHook(session)
-				}
-
-				// do logic
-				svr.handler(session)
-
-				// do some hook
-				for _, connectHook := range svr.disconnectHookList {
-					connectHook(session)
-				}
-			}(t.svr, baseSessionID, conn)
+			//TODO：add log
+			break
 		}
-	}()
-
-	return nil
-}
-
-func (t *tcp) Stop() {
-	t.stopFlag = true
-	t.stopChan <- struct{}{}
-}
-
-// --------------------------------------------------
-//type UdpSession TcpSession
-type TcpSession struct {
-	BasicSession
-	conn net.Conn
-}
-
-func NewTcpSession(sessionID uint64, conn net.Conn) *TcpSession {
-	return &TcpSession{
-		BasicSession: *NewBasicSession(sessionID),
-		conn:         conn,
+		tempDelay = 0
+		// handle every client in its own goroutine
+		go ts.connHandler(conn)
 	}
-}
-
-func (ts *TcpSession) Close() error                        { return ts.conn.Close() }
-func (ts *TcpSession) Write(p []byte) (n int, err error)   { return ts.TcpWrite(p) }
-func (ts *TcpSession) Read(p []byte) (n int, err error)    { return ts.TcpRead(p) }
-func (ts *TcpSession) TcpWrite(data []byte) (int, error)   { return ts.conn.Write(data) }
-func (ts *TcpSession) TcpRead(p []byte) (n int, err error) { return ts.conn.Read(p) }
-
-// for msg router
-// second flag in return means exit
-func (ts *TcpSession) GetNetMsg(length HeadLength, decoderFunc HeadDeserializeFunc) (*NetMsg, *net.UDPAddr, error) {
-	// decode head
-	headerBytes := make([]byte, length)
-	if _, err := io.ReadFull(ts, headerBytes); err != nil {
-		return nil, nil, err
-	}
-
-	head, err := decoderFunc(headerBytes)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	bodyByte := make([]byte, head.GetMsgLength())
-	if _, err := io.ReadFull(ts, bodyByte); err != nil {
-		return nil, nil, err
-	}
-
-	return NewNetMsg(head, bodyByte), nil, nil
-}
-
-func (ts *TcpSession) SendNetMsg(headSerializeFunc HeadSerializeFunc, msg *NetMsg, _ *net.UDPAddr) error {
-	bytes := headSerializeFunc(msg)
-	bytes = append(bytes, msg.GetMsg()...)
-	_, err := ts.Write(bytes)
-	return err
 }
